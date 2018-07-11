@@ -164,14 +164,58 @@ A type `A` meets the `ProtoAllocator` requirements if `A` is `CopyConstructible`
 
 ### `Receiver` requirements
 
-A `Receiver` is a type describing a work item. `Receiver`s are passed as parameters to and invoked by executors.
+A `Receiver` is a type describing a work item that no parameters. `Receiver`s are invoked by executors.
 
 A type `R` satisfies the `Receiver` requirements if `R` satisfies the `MoveConstructible` requirements and the requirements described below are satisfied, where
 
   * `r` denotes an object of (possibly cv-qualified) type `R`, and
-  * `e` denotes an object describing exceptional circumstances.
+  * `e` denotes an object of type `E` describing exceptional circumstances.
 
 Either `r()` or `r.except(e)` is well formed.
+
+### `ValueReceiver` requirements
+
+A `ValueReceiver` is a type describing a work item that takes a single parameter.
+
+A type `R` satisfies the `ValueReceiver` requirements if `R` satisfies `Receiver` requirements and the requirements described below are satisfied, where
+
+  * `r` denotes an object of (possibly cv-qualified) type `R`, and
+  * `val` denotes a (possibly cv-qualified) value of type `T`.
+  * `e` denotes an object of type `E` describing exceptional circumstances.
+
+Either `r(val)` or `r.except(e)` is well formed.
+
+### `BulkReceiver` requirements
+
+A `BulkReceiver` is a type describing a bulk work item that takes no parameters.
+
+A type `R` satisfies the `BulkReceiver` requirements if `R` satisfies `ValueReceiver` requirements and the requirements described below are satisfied, where
+
+  * `x` denotes a (possibly const) executor object of type `X`,
+  * `r` denotes an object of (possibly cv-qualified) type `R`, and
+  * `e` denotes an object of type `E` describing exceptional circumstances.
+  * `n` denotes a shape object.
+  * `i` denotes an index object of type `I`.
+  * `SF` denotes a shared factory that satisfies the `CopyConstructible` requirements and such that `is_invocable_r<S, SF>` is `true`.
+  * `s` denotes an object whose type is `S`,
+  * `AF` denotes a type such that `is_invocable<AF, I, S>` is `true`.
+  * `AFE` denotes a type such that `is_invocable<AF, I, E, S>` is `true`.
+
+| Expression | Return Type | Operational semantics |
+|------------|-------------|---------------------- |
+| `r.create_shared(x)` | `SF` | Creates a temporary object accessible by all execution agents invoking this `BulkReceiver`. |
+| `r.per_agent()` | `AF` | Returns the function called by each execution agent in non-exceptional circumstances. |
+| `r.per_agent_except()` | `AFE` | Returns the function called by each execution agent in exceptional circumstances. |
+
+Either `r(x)` or `r.except(x, e)` is well formed.
+
+If `r(x)` is well formed, it shall:
+* Invokes `r.create_shared(x)` to produce the value `s` on an unspecified thread of execution.
+* Then, creates a group of execution agents of shape `n` that invoke `r.per_agent()(i, s)` at most once for each value of `i` in the range `[0, n)`.
+
+If `r.except(x, e)` is well formed, it shall:
+* Invokes `r.create_shared(x)` to produce the value `s` on an unspecified thread of execution.
+* Then, creates a group of execution agents of shape `n` that invoke `r.per_agent_except()(i, e, s)` at most once for each value of `i` in the range `[0, n)`.
 
 ### General requirements on executors
 
