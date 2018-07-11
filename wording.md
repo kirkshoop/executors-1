@@ -162,6 +162,17 @@ Forward progress guarantees are a property of the concrete `Future` type. [*Note
 
 A type `A` meets the `ProtoAllocator` requirements if `A` is `CopyConstructible` (C++Std [copyconstructible]), `Destructible` (C++Std [destructible]), and `allocator_traits<A>::rebind_alloc<U>` meets the allocator requirements (C++Std [allocator.requirements]), where `U` is an object type. [*Note:* For example, `std::allocator<void>` meets the proto-allocator requirements but not the allocator requirements. *--end note*] No comparison operator, copy operation, move operation, or swap operation on these types shall exit via an exception.
 
+### `Receiver` requirements
+
+A `Receiver` is a type describing a work item. `Receiver`s are passed as parameters to and invoked by executors.
+
+A type `R` satisfies the `Receiver` requirements if `R` is `MoveConstructible` and the requirements described below are satisfied, where
+
+* `r` denotes an object of (possibly cv-qualified) type `R`,
+* and `e` denotes an object describing exceptional circumstances.
+
+Either `r()` or `r.except(e)` is well formed.
+
 ### General requirements on executors
 
 An executor type shall satisfy the requirements of `CopyConstructible` (C++Std [copyconstructible]), `Destructible` (C++Std [destructible]), and `EqualityComparable` (C++Std [equalitycomparable]).
