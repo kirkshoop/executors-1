@@ -191,7 +191,9 @@ The `OneWayExecutor` requirements specify requirements for executors which creat
 
 [*Note:* `OneWayExecutor`s provides fire-and-forget semantics without a channel for awaiting the completion of a submitted function object and obtaining its result. *--end note*]
 
-In the Table below, `x` denotes a (possibly const) executor object of type `X` and `f` denotes a function object of type `F&&` callable as `DECAY_COPY(std::forward<F>(f))()` and where `decay_t<F>` satisfies the `MoveConstructible` requirements.
+In the Table below,
+* `x` denotes a (possibly const) executor object of type `X`, and
+* `f` denotes a forwarding reference to an object of a type `F` that satisfies the `Receiver` requirements.
 
 | Expression | Return Type | Operational semantics |
 |------------|-------------|---------------------- |
