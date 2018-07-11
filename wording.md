@@ -166,10 +166,10 @@ A type `A` meets the `ProtoAllocator` requirements if `A` is `CopyConstructible`
 
 A `Receiver` is a type describing a work item. `Receiver`s are passed as parameters to and invoked by executors.
 
-A type `R` satisfies the `Receiver` requirements if `R` is `MoveConstructible` and the requirements described below are satisfied, where
+A type `R` satisfies the `Receiver` requirements if `R` satisfies the `MoveConstructible` requirements and the requirements described below are satisfied, where
 
-* `r` denotes an object of (possibly cv-qualified) type `R`,
-* and `e` denotes an object describing exceptional circumstances.
+  * `r` denotes an object of (possibly cv-qualified) type `R`, and
+  * `e` denotes an object describing exceptional circumstances.
 
 Either `r()` or `r.except(e)` is well formed.
 
@@ -192,8 +192,9 @@ The `OneWayExecutor` requirements specify requirements for executors which creat
 [*Note:* `OneWayExecutor`s provides fire-and-forget semantics without a channel for awaiting the completion of a submitted function object and obtaining its result. *--end note*]
 
 In the Table below,
-* `x` denotes a (possibly const) executor object of type `X`, and
-* `f` denotes a forwarding reference to an object of a type `F` that satisfies the `Receiver` requirements.
+
+  * `x` denotes a (possibly const) executor object of type `X`, and
+  * `f` denotes a forwarding reference to an object of a type `F` that satisfies the `Receiver` requirements.
 
 | Expression | Return Type | Operational semantics |
 |------------|-------------|---------------------- |
