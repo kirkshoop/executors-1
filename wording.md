@@ -263,7 +263,7 @@ The `ThenExecutor` requirements specify requirements for executors which create 
 A type `X` satisfies the `ThenExecutor` requirements if it satisfies the general requirements on executors, as well as the requirements in the table below.
 
 In the Table below,
-   
+
   * `x` denotes a (possibly const) executor object of type `X`,
   * `fut` denotes a future object satisfying the `Future` requirements,
   * `val` denotes any object stored in `fut`'s associated shared state when it becomes nonexceptionally ready,
@@ -413,6 +413,138 @@ The name `query` denotes a customization point. The effect of the expression `st
 * If the expression `query(E, P)` is well-formed, `query(E, P)`.
 
 * Otherwise, `std::experimental::executors_v1::execution::query(E, P)` is ill-formed.
+
+### `set_done`
+
+    namespace {
+      constexpr unspecified set_done = unspecified;
+    }
+
+The name `set_done` denotes a customization point. The effect of the expression `std::experimental::executors_v1::execution::set_done(R)` for some expressions `R`, is equivalent to:
+
+* If the expression `(R).done()` is well-formed, `(R).done()`.
+
+* Otherwise, if (R) has type `std::promise<void>`, `(R).set_value()`.
+
+* Otherwise, `set_done(R)` if it is a valid expression, with overload resolution performed in a context that does not include a declaration of `std::experimental::executors_v1::execution::set_done`.
+
+* Otherwise, `std::experimental::executors_v1::execution::set_done(R)` is ill-formed.
+
+The expression `std::experimental::executors_v1::execution::set_done(R)` will convert any uncaught exception into the expression `std::experimental::executors_v1::execution::set_error(R, std::current_exception())`.
+
+### `set_error`
+
+    namespace {
+      constexpr unspecified set_error = unspecified;
+    }
+
+The name `set_error` denotes a customization point. The effect of the expression `std::experimental::executors_v1::execution::set_value(R, E)` for some expressions `R` and `E`, is equivalent to:
+
+* If the expression `(R).error(E)` is well-formed, `(R).error(E)`.
+
+* Otherwise, if (R) has type `std::promise<T>` and the expression `(R).set_exception(E)` is well-formed, `(R).set_exception(E)`.
+
+* Otherwise, `set_error(R, E)` if it is a valid expression, with overload resolution performed in a context that does not include a declaration of `std::experimental::executors_v1::execution::set_error`.
+
+* Otherwise, `std::experimental::executors_v1::execution::set_error(R, E)` is ill-formed.
+
+### `set_value`
+
+    namespace {
+      constexpr unspecified set_value = unspecified;
+    }
+
+The name `set_value` denotes a customization point. The effect of the expression `std::experimental::executors_v1::execution::set_value(R, V)` for some expressions `R` and `V`, is equivalent to:
+
+* If the expression `(R).value(V)` is well-formed, `(R).value(V)`.
+
+* Otherwise, if (R) has type `std::promise<T>` and the expression `(R).set_value(V)` is well-formed, `(R).set_value(V)`.
+
+* Otherwise, `set_value(R, V)` if it is a valid expression, with overload resolution performed in a context that does not include a declaration of `std::experimental::executors_v1::execution::set_value`.
+
+* Otherwise, `std::experimental::executors_v1::execution::set_value(R, V)` is ill-formed.
+
+The expression `std::experimental::executors_v1::execution::set_value(R, V)` will convert any uncaught exception into the expression `std::experimental::executors_v1::execution::set_error(R, std::current_exception())`.
+
+### `submit`
+
+    namespace {
+      constexpr unspecified submit = unspecified;
+    }
+
+The name `submit` denotes a customization point. The effect of the expression `std::experimental::executors_v1::execution::submit(S, R)` for some expressions `S` and `R`, is equivalent to:
+
+* If the expression `(S).submit(R)` is well-formed, `(S).submit(R)`.
+
+* Otherwise, `submit(S, R)` if it is a valid expression, with overload resolution performed in a context that does not include a declaration of `std::experimental::executors_v1::execution::submit`.
+
+* Otherwise, `std::experimental::executors_v1::execution::submit(S, R)` is ill-formed.
+
+### `adapt`
+
+    namespace {
+      constexpr unspecified adapt = unspecified;
+    }
+
+The name `adapt` denotes a customization point. The effect of the expression `std::experimental::executors_v1::execution::adapt(A, S)` for some expressions `A` and `S`, is equivalent to:
+
+* If the expression `(A)(S)` is well-formed, `(A)(S)`.
+
+* Otherwise, `adapt(A, S)` if it is a valid expression, with overload resolution performed in a context that does not include a declaration of `std::experimental::executors_v1::execution::adapt`.
+
+* Otherwise, `std::experimental::executors_v1::execution::adapt(A, S)` is ill-formed.
+
+### `via_execute`
+
+    namespace {
+      constexpr unspecified via_execute = unspecified;
+    }
+
+The name `via_execute` denotes a customization point. The effect of the expression `std::experimental::executors_v1::execution::via_execute(E, S)` for some expressions `E`, and `S`, is equivalent to:
+
+* `DECAY_COPY(via_execute(E, S))` if it is a valid expression and its type `T` meets the
+  syntactic requirements of `Sender<T>`, with overload resolution performed in a context that does not include a declaration of `std::experimental::executors_v1::execution::via_execute`.
+
+* Otherwise, `std::experimental::executors_v1::execution::via_execute(E, S)` is equivalent to:
+
+
+    template<Executor E, Sender S>
+    auto via_execute(E e, S s) {
+      return unspecified{[s, e](auto out) mutable {
+          std::experimental::executors_v1::execution::submit(s, unspecified{[out, ex](auto v) mutable {
+              std::experimental::executors_v1::execution::submit(ex, unspecified{[out, v](auto ex){
+                std::experimental::executors_v1::execution::set_value(out, v);
+              }});
+          }});
+      }};
+    }
+
+### `bulk_execute`
+
+    namespace {
+      constexpr unspecified bulk_execute = unspecified;
+    }
+
+The name `bulk_execute` denotes a customization point. The effect of the expression `std::experimental::executors_v1::execution::bulk_execute(E, S, Op, ShapeF, StateF, ResultF)` for some expressions `E`, `S`, `Op`, `ShapeF`, `StateF` and `ResultF`, is equivalent to:
+
+* `bulk_execute(E, S, Op, ShapeF, StateF, ResultF)` if it is a valid expression, with overload resolution performed in a context that does not include a declaration of `std::experimental::executors_v1::execution::bulk_execute`.
+
+* Otherwise, `std::experimental::executors_v1::execution::bulk_execute(E, S, Op, ShapeF, StateF, ResultF)` is equivalent to:
+
+
+    template<Executor E, Sender S, class Op, class ShapeF, class StateF, class ResultS>
+    void bulk_execute(E e, S s, Op op, ShapeF shpf, StateF stf, ResultS rs) {
+      std::experimental::executors_v1::execution::submit(s, unspecified{
+        [op, shpf, stf, rs](auto v) mutable {
+          auto shape = shpf(v);
+          auto st = stf(shape, v);
+          for(auto i : shape) {
+            op(v, i, st);
+          }
+          rs(st);
+        }
+      });
+    }
 
 ### Customization point type traits
 
@@ -721,7 +853,7 @@ template<class Executor>
 
 *Returns:* `execution::query(ex, S::N`*k*`())`.
 
-*Remarks:* This function shall not participate in overload resolution unless `is_same_v<Property,S> && can_query_v<Executor,S::N`*i*`>` is true for at least one `S::N`*i*`. 
+*Remarks:* This function shall not participate in overload resolution unless `is_same_v<Property,S> && can_query_v<Executor,S::N`*i*`>` is true for at least one `S::N`*i*`.
 
 
 ```
@@ -942,7 +1074,7 @@ This sub-clause contains templates that may be used to query the properties of a
         // exposition only
         template<class T>
         using helper = typename T::shape_type;
-    
+
       public:
         using type = std::experimental::detected_or_t<
           size_t, helper, decltype(execution::require(declval<const Executor&>(), execution::bulk))
@@ -1597,10 +1729,10 @@ class static_thread_pool
 {
   public:
     using executor_type = see-below;
-    
+
     // construction/destruction
     explicit static_thread_pool(std::size_t num_threads);
-    
+
     // nocopy
     static_thread_pool(const static_thread_pool&) = delete;
     static_thread_pool& operator=(const static_thread_pool&) = delete;
@@ -1617,7 +1749,7 @@ class static_thread_pool
     // wait for all threads in the thread pool to complete
     void wait();
 
-    // placeholder for a general approach to getting executors from 
+    // placeholder for a general approach to getting executors from
     // standard contexts.
     executor_type executor() noexcept;
 };
