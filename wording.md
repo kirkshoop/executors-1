@@ -420,7 +420,7 @@ The name `query` denotes a customization point. The effect of the expression `st
       constexpr unspecified set_done = unspecified;
     }
 
-The name `set_done` denotes a customization point. The effect of the expression `std::experimental::executors_v1::execution::set_done(R)` for some expressions `R`, is equivalent to:
+The name `set_done` denotes a customization point. The effect of the expression `std::experimental::executors_v1::execution::set_done(R)` for some expression `R`, is equivalent to:
 
 * If the expression `(R).done()` is well-formed, `(R).done()`.
 
@@ -430,7 +430,9 @@ The name `set_done` denotes a customization point. The effect of the expression 
 
 * Otherwise, `std::experimental::executors_v1::execution::set_done(R)` is ill-formed.
 
-The expression `std::experimental::executors_v1::execution::set_done(R)` will convert any uncaught exception into the expression `std::experimental::executors_v1::execution::set_error(R, std::current_exception())`.
+[*Note:* Whenever `std::experimental::executors_v1::execution::set_done(R)` is a valid expression, its type is void. *--end note*]
+
+[*Note:* The expression `std::experimental::executors_v1::execution::set_done(R)` will convert any uncaught exception into the expression `std::experimental::executors_v1::execution::set_error(R, std::current_exception())`. *--end note*]
 
 ### `set_error`
 
@@ -448,6 +450,8 @@ The name `set_error` denotes a customization point. The effect of the expression
 
 * Otherwise, `std::experimental::executors_v1::execution::set_error(R, E)` is ill-formed.
 
+[*Note:* Whenever `std::experimental::executors_v1::execution::set_error(R, E)` is a valid expression, its type is void. *--end note*]
+
 ### `set_value`
 
     namespace {
@@ -464,7 +468,9 @@ The name `set_value` denotes a customization point. The effect of the expression
 
 * Otherwise, `std::experimental::executors_v1::execution::set_value(R, V)` is ill-formed.
 
-The expression `std::experimental::executors_v1::execution::set_value(R, V)` will convert any uncaught exception into the expression `std::experimental::executors_v1::execution::set_error(R, std::current_exception())`.
+[*Note:* Whenever `std::experimental::executors_v1::execution::set_value(R, V)` is a valid expression, its type is void. *--end note*]
+
+[*Note:* The expression `std::experimental::executors_v1::execution::set_value(R, V)` will convert any uncaught exception into the expression `std::experimental::executors_v1::execution::set_error(R, std::current_exception())`. *--end note*]
 
 ### `submit`
 
@@ -480,6 +486,8 @@ The name `submit` denotes a customization point. The effect of the expression `s
 
 * Otherwise, `std::experimental::executors_v1::execution::submit(S, R)` is ill-formed.
 
+[*Note:* Whenever `std::experimental::executors_v1::execution::submit(S, R)` is a valid expression, its type is void. *--end note*]
+
 ### `adapt`
 
     namespace {
@@ -493,6 +501,8 @@ The name `adapt` denotes a customization point. The effect of the expression `st
 * Otherwise, `adapt(A, S)` if it is a valid expression, with overload resolution performed in a context that does not include a declaration of `std::experimental::executors_v1::execution::adapt`.
 
 * Otherwise, `std::experimental::executors_v1::execution::adapt(A, S)` is ill-formed.
+
+[*Note:* Whenever `std::experimental::executors_v1::execution::adapt(A, S)` is a valid expression, its type is unspecified. *--end note*]
 
 ### `via_execute`
 
@@ -518,6 +528,8 @@ The name `via_execute` denotes a customization point. The effect of the expressi
           }});
       }};
     }
+
+[*Note:* Whenever `std::experimental::executors_v1::execution::via_execute(E, S)` is a valid expression, its type satisfies `Sender`. *--end note*]
 
 ### `bulk_execute`
 
@@ -545,6 +557,8 @@ The name `bulk_execute` denotes a customization point. The effect of the express
         }
       });
     }
+
+[*Note:* Whenever `std::experimental::executors_v1::execution::bulk_execute(E, S, Op, ShapeF, StateF, ResultF)` is a valid expression, its type is void. *--end note*]
 
 ### Customization point type traits
 
