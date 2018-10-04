@@ -212,7 +212,7 @@ In the Table below,
 
 *Executor customization points* are functions which adapt an executor's properties. Executor customization points enable uniform use of executors in generic contexts.
 
-When an executor customization point named *NAME* invokes a free execution function of the same name, overload resolution is performed in a context that includes the declaration `void` *NAME*`(auto&... args) = delete;`, where `sizeof...(args)` is the arity of the free execution function. This context also does not include a declaration of the executor customization point.
+When an executor customization point named *NAME* invokes a free execution function of the same name, overload resolution is performed in a context that includes the declaration `template <class... Ts> void` *NAME*`(Ts&&...) = delete;`, where `sizeof...(args)` is the arity of the free execution function. This context also does not include a declaration of the executor customization point.
 
 [*Note:* This provision allows executor customization points to invoke the executor's free, non-member execution function of the same name without recursion. *--end note*]
 
@@ -276,7 +276,7 @@ The name `query` denotes a customization point. The effect of the expression `st
 
 *Execution customization points* are functions which delegate execution to an executor. Execution customization points enable uniform use of executors in generic contexts.
 
-When an execution customization point named *NAME* invokes a free execution function of the same name, overload resolution is performed in a context that includes the declaration `void` *NAME*`(auto&... args) = delete;`, where `sizeof...(args)` is the arity of the free execution function. This context also does not include a declaration of the execution customization point.
+When an execution customization point named *NAME* invokes a free execution function of the same name, overload resolution is performed in a context that includes the declaration `template <class... Ts> void` *NAME*`(Ts&&...) = delete;`, where `sizeof...(args)` is the arity of the free execution function. This context also does not include a declaration of the execution customization point.
 
 [*Note:* This provision allows execution customization points to invoke the executor's free, non-member execution function of the same name without recursion. *--end note*]
 
