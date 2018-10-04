@@ -6,9 +6,9 @@ This Clause describes components supporting execution of function objects [funct
 
 *(The following definition appears in working draft N4762 [thread.req.lockable.general])*
 
-> An *execution agent* is an entity such as a thread that may perform work in parallel with other execution agents. [*Note:* Implementations or users may introduce other kinds of agents such as processes or thread-pool tasks. *--end note*] The calling agent is determined by context; e.g., the calling thread that contains the call, and so on. 
+> An *execution agent* is an entity such as a thread that may perform work in parallel with other execution agents. [*Note:* Implementations or users may introduce other kinds of agents such as processes or thread-pool tasks. *--end note*] The calling agent is determined by context; e.g., the calling thread that contains the call, and so on.
 
-An execution agent invokes a function object  within an *execution context* such as the calling thread or thread-pool.  An *executor* submits a function object to an execution context to be invoked by an execution agent within that execution context. [*Note:* Invocation of the function object may be inlined such as when the execution context is the calling thread, or may be scheduled such as when the execution context is a thread-pool with task scheduler. *--end note*] An executor may submit a function object with *execution properties* that specify how the submission and invocation of the function object interacts with the submitting thread and execution context, including forward progress guarantees [intro.progress]. 
+An execution agent invokes a function object  within an *execution context* such as the calling thread or thread-pool.  An *executor* submits a function object to an execution context to be invoked by an execution agent within that execution context. [*Note:* Invocation of the function object may be inlined such as when the execution context is the calling thread, or may be scheduled such as when the execution context is a thread-pool with task scheduler. *--end note*] An executor may submit a function object with *execution properties* that specify how the submission and invocation of the function object interacts with the submitting thread and execution context, including forward progress guarantees [intro.progress].
 
 For the intent of this library and extensions to this library, the *lifetime of an execution agent* begins before the function object is invoked and ends after this invocation completes, either normally or having thrown an exception.
 
@@ -25,6 +25,9 @@ namespace execution {
     constexpr unspecified require = unspecified;
     constexpr unspecified prefer = unspecified;
     constexpr unspecified query = unspecified;
+
+    constexpr unspecified execute = unspecified;
+    constexpr unspecified bulk_execute = unspecified;
   }
 
   // Customization point type traits:
@@ -33,12 +36,20 @@ namespace execution {
   template<class Executor, class... Properties> struct can_prefer;
   template<class Executor, class Property> struct can_query;
 
+  template<class Executor, class F> struct can_execute;
+  template<class Executor, class F, class SF> struct can_bulk_execute;
+
   template<class Executor, class... Properties>
     constexpr bool can_require_v = can_require<Executor, Properties...>::value;
   template<class Executor, class... Properties>
     constexpr bool can_prefer_v = can_prefer<Executor, Properties...>::value;
   template<class Executor, class Property>
     constexpr bool can_query_v = can_query<Executor, Property>::value;
+
+  template<class Executor, class F>
+    constexpr bool can_execute_v = can_execute<Executor, F>::value;
+  template<class Executor, class F, class SF>
+    constexpr bool can_bulk_execute_v = can_bulk_execute<Executor, F, SF>::value;
 
   // Associated execution context property:
 
@@ -154,7 +165,7 @@ An executor type shall satisfy the requirements of `CopyConstructible` (C++Std [
 
 None of these concepts' operations, nor an executor type's swap operations, shall exit via an exception.
 
-None of these concepts' operations, nor an executor type's associated execution functions, associated query functions, or other member functions defined in executor type requirements, shall introduce data races as a result of concurrent invocations of those functions from different threads.
+None of these concepts' operations, nor an executor type's associated execution customization points, associated query functions, or other member functions defined in executor type requirements, shall introduce data races as a result of concurrent invocations of those functions from different threads.
 
 For any two (possibly const) values `x1` and `x2` of some executor type `X`, `x1 == x2` shall return `true` only if `x1.query(p) == x2.query(p)` for every property `p` where both `x1.query(p)` and `x2.query(p)` are well-formed and result in a non-void type that is `EqualityComparable` (C++Std [equalitycomparable]). [*Note:* The above requirements imply that `x1 == x2` returns `true` if `x1` and `x2` can be interchanged with identical effects. An executor may conceptually contain additional properties which are not exposed by a named property type that can be observed via `execution::query`; in this case, it is up to the concrete executor implementation to decide if these properties affect equality. Returning `false` does not necessarily imply that the effects are not identical. *--end note*]
 
@@ -166,15 +177,15 @@ A type `X` satisfies the `OneWayExecutor` requirements if it satisfies the gener
 
 [*Note:* `OneWayExecutor`s provides fire-and-forget semantics without a channel for awaiting the completion of a submitted function object and obtaining its result. *--end note*]
 
-In the Table below, 
+In the Table below,
 
 - `x` denotes a (possibly const) executor object of type `X`,
-- `cf` denotes the function object  `DECAY_COPY(std::forward<F>(f))` 
+- `cf` denotes the function object  `DECAY_COPY(std::forward<F>(f))`
 - `f` denotes a function object of type `F&&` invocable as `cf()` and where `decay_t<F>` satisfies the `MoveConstructible` requirements.
 
 | Expression | Return Type | Operational semantics |
 |------------|-------------|---------------------- |
-| `x.execute(f)` | `void` | Evaluates `DECAY_COPY(std::forward<F>(f))` on the calling thread to create `cf` that will be invoked at most once by an execution agent. <br/> May block pending completion of this invocation. <br/> Synchronizes with [intro.multithread] the invocation of `f`. <br/>Shall not propagate any exception thrown by the function object or any other function submitted to the executor. [*Note:* The treatment of exceptions thrown by one-way submitted functions and the forward progress guarantee of the associated execution agent(s) are implementation defined. *--end note.*] |
+| `execute(x, f)` | `void` | Evaluates `DECAY_COPY(std::forward<F>(f))` on the calling thread to create `cf` that will be invoked at most once by an execution agent. <br/> May block pending completion of this invocation. <br/> Synchronizes with [intro.multithread] the invocation of `f`. <br/>Shall not propagate any exception thrown by the function object or any other function submitted to the executor. [*Note:* The treatment of exceptions thrown by one-way submitted functions and the forward progress guarantee of the associated execution agent(s) are implementation defined. *--end note.*] |
 
 ### `BulkOneWayExecutor` requirements
 
@@ -194,7 +205,7 @@ In the Table below,
 
 | Expression | Return Type | Operational semantics |
 |------------|-------------|---------------------- |
-| `x.bulk_execute(f, n, sf)` | `void` | Evaluates `DECAY_COPY(std::forward<F>(f))` on the calling thread to create a function object `cf`.  *[Note:* Additional copies of `cf` may subsequently be created. *--end note]*  For each value of `i` in shape `n` `cf(i,s)` (or copy of `cf)`) will be invoked at most once by an execution agent that is unique for each value of `i`.  `sf()` will be invoked at most once to produce value `s` before any invocation of `cf`. <br/> May block pending completion of one or more invocations of `cf`. <br/> Synchronizes with (C++Std [intro.multithread]) the invocations of `f`. <br/> Shall not propagate any exception thrown by `cf` or any other function submitted to the executor. [*Note:* The treatment of exceptions thrown by bulk one-way submitted functions and the forward progress guarantee of the associated execution agent(s) are implementation defined. *--end note.*] |
+| `bulk_execute(x, f, n, sf)` | `void` | Evaluates `DECAY_COPY(std::forward<F>(f))` on the calling thread to create a function object `cf`.  *[Note:* Additional copies of `cf` may subsequently be created. *--end note]*  For each value of `i` in shape `n` `cf(i,s)` (or copy of `cf)`) will be invoked at most once by an execution agent that is unique for each value of `i`.  `sf()` will be invoked at most once to produce value `s` before any invocation of `cf`. <br/> May block pending completion of one or more invocations of `cf`. <br/> Synchronizes with (C++Std [intro.multithread]) the invocations of `f`. <br/> Shall not propagate any exception thrown by `cf` or any other function submitted to the executor. [*Note:* The treatment of exceptions thrown by bulk one-way submitted functions and the forward progress guarantee of the associated execution agent(s) are implementation defined. *--end note.*] |
 
 
 ## Executor customization points
@@ -261,7 +272,41 @@ The name `query` denotes a customization point. The effect of the expression `st
 
 * Otherwise, `std::execution::query(E, P)` is ill-formed.
 
-### Customization point type traits
+## Execution customization points
+
+*Execution customization points* are functions which delegate execution to an executor. Execution customization points enable uniform use of executors in generic contexts.
+
+When an execution customization point named *NAME* invokes a free execution function of the same name, overload resolution is performed in a context that includes the declaration `void` *NAME*`(auto&... args) = delete;`, where `sizeof...(args)` is the arity of the free execution function. This context also does not include a declaration of the execution customization point.
+
+[*Note:* This provision allows execution customization points to invoke the executor's free, non-member execution function of the same name without recursion. *--end note*]
+
+Whenever `std::execution::`*NAME*`(`*ARGS*`)` is a valid expression, that expression satisfies the syntactic requirements for the free execution function named *NAME* with arity `sizeof...(`*ARGS*`)` with that free execution function's semantics.
+
+### `execute`
+
+    namespace {
+      constexpr unspecified execute = unspecified;
+    }
+
+The name `execute` denotes an execution customization point. The effect of the expression `std::execution::execute(E, F)` for some expressions `E` and `F` is equivalent to:
+
+* If the expression `execute(E, F)` is well-formed, `execute(E, F)`.
+
+* Otherwise, `std::execution::execute(E, F)` is ill-formed.
+
+### `bulk_execute`
+
+    namespace {
+      constexpr unspecified bulk_execute = unspecified;
+    }
+
+The name `bulk_execute` denotes an execution customization point. The effect of the expression `std::execution::bulk_execute(E, F, S, SF)` for some expressions `E`, `F`, `S` and `SF` is equivalent to:
+
+* If the expression `bulk_execute(E, F, S, SF)` is well-formed, `bulk_execute(E, F, S, SF)`.
+
+* Otherwise, `std::execution::bulk_execute(E, F, S, SF)` is ill-formed.
+
+### Executor customization point type traits
 
     template<class Executor, class... Properties> struct can_require;
     template<class Executor, class... Properties> struct can_prefer;
@@ -274,6 +319,19 @@ This sub-clause contains templates that may be used to query the properties of a
 | `template<class T>` <br/>`struct can_require` | The expression `std::execution::require( declval<const Executor>(), declval<Properties>()...)` is well formed. | `T` is a complete type. |
 | `template<class T>` <br/>`struct can_prefer` | The expression `std::execution::prefer( declval<const Executor>(), declval<Properties>()...)` is well formed. | `T` is a complete type. |
 | `template<class T>` <br/>`struct can_query` | The expression `std::execution::query( declval<const Executor>(), declval<Property>())` is well formed. | `T` is a complete type. |
+
+### Execution customization point type traits
+
+    template<class Executor, class F> struct can_execute;
+    template<class Executor, class F, class SF> struct can_bulk_execute;
+
+This sub-clause contains templates that may be used to query whether an execution customization point expression is well-formed at compile-time.
+Each of these templates shall satisfy the requirements of `DefaultConstructible` (C++Std [defaultconstructible]) and `CopyConstructible` (C++Std [copyconstructible]) with a BaseCharacteristic of `true_type` if the expression would be well-formed, otherwise `false_type`.
+
+| Template                   | Condition           | Preconditions  |
+|----------------------------|---------------------|----------------|
+| `template<`<br/>`class Executor,`<br/>`class F>` <br/>`struct can_execute` | The expression <br/>`std::execution::execute( `<br/>`declval<const Executor>(), `<br/>`declval<F>())` is well formed. | `Executor` is a complete type. |
+| `template<`<br/>`class Executor, `<br/>`class F, `<br/>`class SF>` <br/>`struct can_bulk_execute` | The expression <br/>`std::execution::bulk_execute( `<br/>`declval<const Executor>(), `<br/>`declval<F>(), `<br/>`declval<executor_shape_t<Executor>>(), `<br/>`declval<SF>())` is well formed. | `Executor` is a complete type. |
 
 ## Executor properties
 
@@ -323,9 +381,9 @@ If both `static_query_v` and `value()` are present, they shall return the same t
     {
       static constexpr bool is_requirable = false;
       static constexpr bool is_preferable = false;
-    
+
       using polymorphic_query_result_type = any; // TODO: alternatively consider void*, or simply omitting the type.
-    
+
       template<class Executor>
         static constexpr decltype(auto) static_query_v
           = Executor::query(context_t());
@@ -346,16 +404,16 @@ The interface-changing properties conform to the following specification:
     {
       static constexpr bool is_requirable = true;
       static constexpr bool is_preferable = false;
-    
-      template<class... SupportableProperties> 
+
+      template<class... SupportableProperties>
         class polymorphic_executor_type;
-    
+
       using polymorphic_query_result_type = bool;
-    
+
       template<class Executor>
         static constexpr bool static_query_v
           = see-below;
-    
+
       static constexpr bool value() const { return true; }
     };
 
@@ -671,9 +729,7 @@ template<class Executor>
   friend see-below require(Executor ex, oneway_t);
 ```
 
-*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. `E1` has member functions `require` and `query` that forward to the corresponding members of the copy of `ex`, if present. `e1` has the same properties as `ex`, except for the addition of the `oneway_t` property and the exclusion of other interface-changing properties. The type `E1` satisfies the `OneWayExecutor` requirements by implementing member function `execute` in terms of the member function `bulk_execute` of the object `ex`, and `E1` has a member function `Executor require(bulk_oneway_t) const` that returns a copy of `ex`.
-
-*Remarks:* This function shall not participate in overload resolution unless `oneway_t::static_query_v<Executor>` is false and `bulk_oneway_t::static_query_v<Executor>` is true.
+*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. `E1` has member functions `require` and `query` that forward to the corresponding members of the copy of `ex`, if present. `e1` has the same properties as `ex`, except for the addition of the `oneway_t` property and the exclusion of other interface-changing properties. The type `E1` satisfies the `OneWayExecutor` requirements by implementing the `execute` execution customization point.
 
 #### `oneway_t` polymorphic wrapper
 
@@ -689,9 +745,6 @@ public:
 
   template<class Executor>
     polymorphic_executor_type& operator=(Executor e);
-
-  template<class Function>
-    void execute(Function&& f) const;
 };
 ```
 
@@ -722,17 +775,6 @@ template<class Executor>
 
 *Returns:* `*this`.
 
-```
-template<class Function>
-  void execute(Function&& f) const;
-```
-
-*Effects:* Performs `e.execute(f2)`, where:
-
-  * `e` is the target object of `*this`;
-  * `f1` is the result of `DECAY_COPY(std::forward<Function>(f))`;
-  * `f2` is a function object of unspecified type that, when invoked as `f2()`, performs `f1()`.
-
 #### `bulk_oneway_t` customization points
 
 In addition to conforming to the above specification for interface-changing properties, the `oneway_t` property provides the following customization:
@@ -750,7 +792,7 @@ template<class Executor>
   friend see-below require(Executor ex, bulk_oneway_t);
 ```
 
-*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. `E1` has member functions `require` and `query` that forward to the corresponding members of the copy of `ex`, if present. `e1` has the same properties as `ex`, except for the addition of the `bulk_oneway_t` property and the exclusion of other interface-changing properties. The type `E1` satisfies the `BulkOneWayExecutor` requirements by implementing member function `bulk_execute` in terms of the member function `execute` of the object `ex`, and `E1` has a member function `Executor require(oneway_t) const` that returns a copy of `ex`.
+*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. `E1` has member functions `require` and `query` that forward to the corresponding members of the copy of `ex`, if present. `e1` has the same properties as `ex`, except for the addition of the `bulk_oneway_t` property and the exclusion of other interface-changing properties. The type `E1` satisfies the `BulkOneWayExecutor` requirements by implementing the `bulk_execute` execution customization point.
 
 *Remarks:* This function shall not participate in overload resolution unless `bulk_oneway_t::static_query_v<Executor>` is false and `oneway_t::static_query_v<Executor>` is true.
 
@@ -768,9 +810,6 @@ public:
 
   template<class Executor>
     polymorphic_executor_type& operator=(Executor e);
-
-  template<class Function, class SharedFactory>
-    void bulk_execute(Function&& f, size_t n, SharedFactory&& sf) const;
 };
 ```
 
@@ -801,21 +840,6 @@ template<class Executor>
 
 *Returns:* `*this`.
 
-```
-template<class Function, class SharedFactory>
-  void bulk_execute(Function&& f, size_t n, SharedFactory&& sf) const;
-```
-
-*Effects:* Performs `e.bulk_execute(f2, n, sf2)`, where:
-
-  * `e` is the target object of `*this`;
-  * `sf1` is the result of `DECAY_COPY(std::forward<SharedFactory>(sf))`;
-  * `sf2` is a function object of unspecified type that, when invoked as `sf2()`, performs `sf1()`;
-  * `s1` is the result of `sf1()`;
-  * `s2` is the result of `sf2()`;
-  * `f1` is the result of `DECAY_COPY(std::forward<Function>(f))`;
-  * `f2` is a function object of unspecified type that, when invoked as `f2(i, s2)`, performs `f1(i, s1)`, where `i` is a value of type `size_t`.
-
 ### Behavioral properties
 
 Behavioral properties define a set of mutually-exclusive nested properties describing executor behavior.
@@ -827,53 +851,53 @@ Unless otherwise specified, behavioral property types `S`, their nested property
       static constexpr bool is_requirable = false;
       static constexpr bool is_preferable = false;
       using polymorphic_query_result_type = S;
-    
+
       template<class Executor>
         static constexpr auto static_query_v
           = see-below;
-    
+
       template<class Executor>
       friend constexpr S query(const Executor& ex, const Property& p) noexcept(see-below);
-    
+
       friend constexpr bool operator==(const S& a, const S& b);
       friend constexpr bool operator!=(const S& a, const S& b) { return !operator==(a, b); }
-    
+
       constexpr S();
-    
+
       struct N1
       {
         static constexpr bool is_requirable = true;
         static constexpr bool is_preferable = true;
         using polymorphic_query_result_type = S;
-    
+
         template<class Executor>
           static constexpr auto static_query_v
             = see-below;
-    
+
         static constexpr S value() { return S(N1()); }
       };
-    
+
       static constexpr n1;
-    
+
       constexpr S(const N1);
-    
+
       ...
-    
+
       struct NN
       {
         static constexpr bool is_requirable = true;
         static constexpr bool is_preferable = true;
         using polymorphic_query_result_type = S;
-    
+
         template<class Executor>
           static constexpr auto static_query_v
             = see-below;
-    
+
         static constexpr S value() { return S(NN()); }
       };
-    
+
       static constexpr nN;
-    
+
       constexpr S(const NN);
     };
 
@@ -923,7 +947,7 @@ template<class Executor>
 
 *Returns:* `execution::query(ex, S::N`*k*`())`.
 
-*Remarks:* This function shall not participate in overload resolution unless `is_same_v<Property,S> && can_query_v<Executor,S::N`*i*`>` is true for at least one `S::N`*i*`. 
+*Remarks:* This function shall not participate in overload resolution unless `is_same_v<Property,S> && can_query_v<Executor,S::N`*i*`>` is true for at least one `S::N`*i*`.
 
 
 ```
@@ -934,15 +958,15 @@ bool operator==(const S& a, const S& b);
 
 #### Blocking properties
 
-The `blocking_t` property describes what guarantees executors provide about the blocking behavior of their execution functions.
+The `blocking_t` property describes what guarantees executors provide about the blocking behavior of their execution customization points.
 
 `blocking_t` provides nested property types and objects as described below.
 
 | Nested Property Type | Nested Property Object Name | Requirements |
 |--------------------------|------------------------|--------------|
-| `blocking_t::possibly_t` | `blocking_t::possibly` | Invocation of an executor's execution function may block pending completion of one or more invocations of the submitted function object. |
-| `blocking_t::always_t` | `blocking_t::always` | Invocation of an executor's execution function shall block until completion of all invocations of submitted function object. |
-| `blocking_t::never_t` | `blocking_t::never` | Invocation of an executor's execution function shall not block pending completion of the invocations of the submitted function object. |
+| `blocking_t::possibly_t` | `blocking_t::possibly` | Invocation of an executor's execution customization point may block pending completion of one or more invocations of the submitted function object. |
+| `blocking_t::always_t` | `blocking_t::always` | Invocation of an executor's execution customization point shall block until completion of all invocations of submitted function object. |
+| `blocking_t::never_t` | `blocking_t::never` | Invocation of an executor's execution customization point shall not block pending completion of the invocations of the submitted function object. |
 
 ##### `blocking_t::always_t` customization points
 
@@ -961,7 +985,7 @@ template<class Executor>
   friend see-below require(Executor ex, blocking_t::always_t);
 ```
 
-*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. If `Executor` satisfies the `OneWayExecutor` requirements, `E1` shall satisfy the `OneWayExecutor` requirements by providing member functions `require`, `query`, and `execute` that forward to the corresponding member functions of the copy of `ex`. If `Executor` satisfies the `BulkOneWayExecutor` requirements, `E1` shall satisfy the `BulkOneWayExecutor` requirements by providing member functions `require`, `query`, and `bulk_execute` that forward to the corresponding member functions of the copy of `ex`. In addition, `E1` provides an overload of `require` such that `e1.require(blocking.always)` returns a copy of `e1`, an overload of `query` such that `e1.query(blocking)` returns `blocking.always`, and functions `execute` and `bulk_execute` shall block the calling thread until the submitted functions have finished execution. `e1` has the same executor properties as `ex`, except for the addition of the `blocking_t::always_t` property, and removal of `blocking_t::never_t` and `blocking_t::possibly_t` properties if present.
+*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. If `Executor` satisfies the `OneWayExecutor` requirements, `E1` shall satisfy the `OneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex`. If `Executor` satisfies the `BulkOneWayExecutor` requirements, `E1` shall satisfy the `BulkOneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex`. In addition, `E1` provides an overload of `require` such that `e1.require(blocking.always)` returns a copy of `e1`, an overload of `query` such that `e1.query(blocking)` returns `blocking.always`, and the execution customization points `execute` and `bulk_execute` shall block the calling thread until the submitted functions have finished execution. `e1` has the same executor properties as `ex`, except for the addition of the `blocking_t::always_t` property, and removal of `blocking_t::never_t` and `blocking_t::possibly_t` properties if present.
 
 *Remarks:* This function shall not participate in overload resolution unless `blocking_adaptation_t::static_query_v<Executor>` is `blocking_adaptation.allowed`.
 
@@ -993,7 +1017,7 @@ template<class Executor>
   friend see-below require(Executor ex, blocking_adaptation_t::allowed_t);
 ```
 
-*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. If `Executor` satisfies the `OneWayExecutor` requirements, `E1` shall satisfy the `OneWayExecutor` requirements by providing member functions `require`, `query`, and `execute` that forward to the corresponding member functions of the copy of `ex`. If `Executor` satisfies the `BulkOneWayExecutor` requirements, `E1` shall satisfy the `BulkOneWayExecutor` requirements by providing member functions `require`, `query`, and `bulk_execute` that forward to the corresponding member functions of the copy of `ex`. In addition, `blocking_adaptation_t::static_query_v<E1>` is `blocking_adaptation.allowed`, and `e1.require(blocking_adaptation.disallowed)` yields a copy of `ex`. `e1` has the same executor properties as `ex`, except for the addition of the `blocking_adaptation_t::allowed_t` property.
+*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. If `Executor` satisfies the `OneWayExecutor` requirements, `E1` shall satisfy the `OneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex`. If `Executor` satisfies the `BulkOneWayExecutor` requirements, `E1` shall satisfy the `BulkOneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex`. In addition, `blocking_adaptation_t::static_query_v<E1>` is `blocking_adaptation.allowed`, and `e1.require(blocking_adaptation.disallowed)` yields a copy of `ex`. `e1` has the same executor properties as `ex`, except for the addition of the `blocking_adaptation_t::allowed_t` property.
 
 #### Properties to indicate if submitted tasks represent continuations
 
@@ -1070,20 +1094,20 @@ The `allocator_t` property conforms to the following specification:
     {
         static constexpr bool is_requirable = true;
         static constexpr bool is_preferable = true;
-    
+
         template<class Executor>
         static constexpr auto static_query_v
           = Executor::query(allocator_t);
-    
+
         template <typename OtherProtoAllocator>
         allocator_t<OtherProtoAllocator> operator()(const OtherProtoAllocator &a) const {
         	return allocator_t<OtherProtoAllocator>{a};
         }
-    
+
         static constexpr ProtoAllocator value() const {
           return a_; // exposition only
         }
-    
+
     private:
         ProtoAllocator a_; // exposition only
     };
@@ -1126,12 +1150,12 @@ This sub-clause contains templates that may be used to query the properties of a
         // exposition only
         template<class T>
         using helper = typename T::shape_type;
-    
+
       public:
         using type = std::experimental::detected_or_t<
           size_t, helper, decltype(execution::require(declval<const Executor&>(), execution::bulk))
         >;
-    
+
         // exposition only
         static_assert(std::is_integral_v<type>, "shape type must be an integral type");
     };
@@ -1145,12 +1169,12 @@ This sub-clause contains templates that may be used to query the properties of a
         // exposition only
         template<class T>
         using helper = typename T::index_type;
-    
+
       public:
         using type = std::experimental::detected_or_t<
           executor_shape_t<Executor>, helper, decltype(execution::require(declval<const Executor&>(), execution::bulk))
         >;
-    
+
         // exposition only
         static_assert(std::is_integral_v<type>, "index type must be an integral type");
     };
@@ -1159,7 +1183,7 @@ This sub-clause contains templates that may be used to query the properties of a
 
 ### Class `bad_executor`
 
-An exception of type `bad_executor` is thrown by polymorphic executor member functions `execute` and `bulk_execute` when the executor object has no target.
+An exception of type `bad_executor` is thrown by execution customization point functions `execute` and `bulk_execute` when the executor object has no target.
 
 ```
 class bad_executor : public exception
@@ -1196,10 +1220,11 @@ Consider a generic function that performs some task immediately if it can, and o
       if (try_work() == done)
       {
         // Work completed immediately, invoke callback.
-        execution::require(ex,
-            execution::single,
-            execution::oneway,
-          ).execute(callback);
+        execution::execute(
+            execution::require(ex,
+                execution::single,
+                execution::oneway),
+            callback);
       }
       else
       {
@@ -1219,17 +1244,18 @@ This function can be used with an inline executor which is defined as follows:
       {
         return true;
       }
-    
+
       constexpr bool operator!=(const inline_executor&) const noexcept
       {
         return false;
       }
-    
-      template<class Function> void execute(Function f) const noexcept
-      {
-        f();
-      }
+
     };
+    template<class Function>
+    void execute(inline_executor, Function f) noexcept
+    {
+      f();
+    }
 
 as, in the case of an unsupported property, invocation of `execution::prefer` will fall back to an identity operation.
 
@@ -1245,10 +1271,11 @@ The polymorphic `executor` wrapper should be able to simply swap in, so that we 
       if (try_work() == done)
       {
         // Work completed immediately, invoke callback.
-        execution::require(ex,
-            execution::single,
-            execution::oneway,
-          ).execute(callback);
+        execution::execute(
+            execution::require(ex,
+                execution::single,
+                execution::oneway),
+            callback);
       }
       else
       {
@@ -1282,26 +1309,26 @@ The `prefer_only` adapter addresses this by turning off the `is_requirable` attr
     struct prefer_only
     {
       InnerProperty property;
-    
+
       static constexpr bool is_requirable = false;
       static constexpr bool is_preferable = InnerProperty::is_preferable;
-    
+
       using polymorphic_query_result_type = see-below; // not always defined
-    
+
       template<class Executor>
         static constexpr auto static_query_v = see-below; // not always defined
-    
+
       constexpr prefer_only(const InnerProperty& p);
-    
+
       constexpr auto value() const
         noexcept(noexcept(std::declval<const InnerProperty>().value()))
           -> decltype(std::declval<const InnerProperty>().value());
-    
+
       template<class Executor, class Property>
       friend auto prefer(Executor ex, const Property& p)
         noexcept(noexcept(execution::prefer(std::move(ex), std::declval<const InnerProperty>())))
           -> decltype(execution::prefer(std::move(ex), std::declval<const InnerProperty>()));
-    
+
       template<class Executor, class Property>
       friend constexpr auto query(const Executor& ex, const Property& p)
         noexcept(noexcept(execution::query(ex, std::declval<const InnerProperty>())))
@@ -1374,7 +1401,7 @@ creator. As a result, no default constructor is considered correct for
 arbitrary use cases and `static_thread_pool` does not support any form of
 automatic resizing.   
 
-`static_thread_pool` presents an effectively unbounded input queue and the execution functions of `static_thread_pool`'s associated executors do not block on this input queue.
+`static_thread_pool` presents an effectively unbounded input queue and the execution customization points of `static_thread_pool`'s associated executors do not block on this input queue.
 
 [*Note:* Because `static_thread_pool` represents work as parallel execution agents,
 situations which require concurrent execution properties are not guaranteed
@@ -1385,10 +1412,10 @@ class static_thread_pool
 {
   public:
     using executor_type = see-below;
-    
+
     // construction/destruction
     explicit static_thread_pool(std::size_t num_threads);
-    
+
     // nocopy
     static_thread_pool(const static_thread_pool&) = delete;
     static_thread_pool& operator=(const static_thread_pool&) = delete;
@@ -1405,7 +1432,7 @@ class static_thread_pool
     // wait for all threads in the thread pool to complete
     void wait();
 
-    // placeholder for a general approach to getting executors from 
+    // placeholder for a general approach to getting executors from
     // standard contexts.
     executor_type executor() noexcept;
 };
@@ -1691,53 +1718,38 @@ bool operator!=(const C& a, const C& b) noexcept;
 #### `static_thread_pool` executor types with the `execution::oneway` property
 
 In addition to conforming to the above specification, `static_thread_pool`
-executors having the `execution::oneway` property established shall conform to
-the following specification.
+executors having the `execution::oneway` property established shall implement the `execute` execution customization point.
 
 ```
-class C
-{
-  public:
-    template<class Function>
-      void execute(Function&& f) const;
-};
+class C { ... };
+
+template<class Function>
+  void execute(const C& c, Function&& f);
 ```
 
 `C` is a type satisfying the `OneWayExecutor` requirements.
 
-```
-template<class Function>
-  void execute(Function&& f) const;
-```
-
 *Effects:* Submits the function `f` for execution on the `static_thread_pool`
 according to the `OneWayExecutor` requirements and the properties established
-for `*this`. If the submitted function `f` exits via an exception, the
+for `c`. If the submitted function `f` exits via an exception, the
 `static_thread_pool` invokes `std::terminate()`.
 
 #### `static_thread_pool` executor types with the `execution::bulk_oneway` property
 
 In addition to conforming to the above specification, `static_thread_pool`
 executors having the `execution::bulk_oneway` property established shall
-conform to the following specification.
+implement the `bulk_execute` execution customization point.
 
 ```
-class C
-{
-  public:
-    template<class Function, class SharedFactory>
-      void bulk_execute(Function&& f, size_t n, SharedFactory&& sf) const;
-};
+class C { ... };
+
+template<class Function, class SharedFactory>
+  void bulk_execute(const C& c, Function&& f, size_t n, SharedFactory&& sf);
 ```
 
 `C` is a type satisfying the `BulkOneWayExecutor` requirements.
 
-```
-template<class Function, class SharedFactory>
-  void bulk_execute(Function&& f, size_t n, SharedFactory&& sf) const;
-```
-
 *Effects:* Submits the function `f` for bulk execution on the
 `static_thread_pool` according to the `BulkOneWayExecutor` requirements and the
-properties established for `*this`. If the submitted function `f` exits via an
+properties established for `c`. If the submitted function `f` exits via an
 exception, the `static_thread_pool` invokes `std::terminate()`.
