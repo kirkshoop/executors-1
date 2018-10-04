@@ -276,19 +276,21 @@ The name `query` denotes a customization point. The effect of the expression `st
 
 *Execution customization points* are functions which delegate execution to an executor. Execution customization points enable uniform use of executors in generic contexts.
 
-When an execution customization point named *NAME* invokes a free execution function of the same name, overload resolution is performed in a context that includes the declaration `template <class... Ts> void` *NAME*`(Ts&&...) = delete;`, where `sizeof...(args)` is the arity of the free execution function. This context also does not include a declaration of the execution customization point.
-
-[*Note:* This provision allows execution customization points to invoke the executor's free, non-member execution function of the same name without recursion. *--end note*]
-
-Whenever `std::execution::`*NAME*`(`*ARGS*`)` is a valid expression, that expression satisfies the syntactic requirements for the free execution function named *NAME* with arity `sizeof...(`*ARGS*`)` with that free execution function's semantics.
-
 ### `execute`
 
     namespace {
       constexpr unspecified execute = unspecified;
     }
 
-The name `execute` denotes an execution customization point. The effect of the expression `std::execution::execute(E, F)` for some expressions `E` and `F` is equivalent to:
+The name `execute` denotes an execution customization point.
+
+When `execute` invokes a free execution function of the same name, overload resolution is performed in a context that includes the declaration `template <class Executor, class Function> void execute(const Executor&, Function) = delete;`. This context also does not include a declaration of the execution customization point.
+
+[*Note:* This provision allows execution customization points to invoke the executor's free, non-member execution function of the same name without recursion. *--end note*]
+
+Whenever `std::execution::execute(E, F)` is a valid expression, that expression satisfies the syntactic requirements for the free execution function `execute(E, F)` with that free execution function's semantics.
+
+The effect of the expression `std::execution::execute(E, F)` for some expressions `E` and `F` is equivalent to:
 
 * If the expression `execute(E, F)` is well-formed, `execute(E, F)`.
 
@@ -300,7 +302,15 @@ The name `execute` denotes an execution customization point. The effect of the e
       constexpr unspecified bulk_execute = unspecified;
     }
 
-The name `bulk_execute` denotes an execution customization point. The effect of the expression `std::execution::bulk_execute(E, F, S, SF)` for some expressions `E`, `F`, `S` and `SF` is equivalent to:
+The name `bulk_execute` denotes an execution customization point.
+
+When `bulk_execute` invokes a free execution function of the same name, overload resolution is performed in a context that includes the declaration `template <class Executor, class Function, class Shape, class SharedFactory> void bulk_execute(const Executor&, Function, Shape, SharedFactory) = delete;`. This context also does not include a declaration of the execution customization point.
+
+[*Note:* This provision allows execution customization points to invoke the executor's free, non-member execution function of the same name without recursion. *--end note*]
+
+Whenever `std::execution::bulk_execute(E, F, S, SF)` is a valid expression, that expression satisfies the syntactic requirements for the free execution function `bulk_execute(E, F, S, SF)` with that free execution function's semantics.
+
+The effect of the expression `std::execution::bulk_execute(E, F, S, SF)` for some expressions `E`, `F`, `S` and `SF` is equivalent to:
 
 * If the expression `bulk_execute(E, F, S, SF)` is well-formed, `bulk_execute(E, F, S, SF)`.
 
@@ -729,7 +739,7 @@ template<class Executor>
   friend see-below require(Executor ex, oneway_t);
 ```
 
-*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. `E1` has member functions `require` and `query` that forward to the corresponding members of the copy of `ex`, if present. `e1` has the same properties as `ex`, except for the addition of the `oneway_t` property and the exclusion of other interface-changing properties. The type `E1` satisfies the `OneWayExecutor` requirements by implementing the `execute` execution customization point.
+*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. `E1` has member functions `require` and `query` that forward to the corresponding members of the copy of `ex`, if present, and by implementing the `execute` execution customization point that forwards to the `execute` execution customization point of the copy of `ex`. `e1` has the same properties as `ex`, except for the addition of the `oneway_t` property and the exclusion of other interface-changing properties. The type `E1` satisfies the `OneWayExecutor` requirements by implementing the `execute` execution customization point.
 
 *Remarks:* This function shall not participate in overload resolution unless `oneway_t::static_query_v<Executor>` is false and `bulk_oneway_t::static_query_v<Executor>` is true.
 
@@ -794,7 +804,7 @@ template<class Executor>
   friend see-below require(Executor ex, bulk_oneway_t);
 ```
 
-*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. `E1` has member functions `require` and `query` that forward to the corresponding members of the copy of `ex`, if present. `e1` has the same properties as `ex`, except for the addition of the `bulk_oneway_t` property and the exclusion of other interface-changing properties. The type `E1` satisfies the `BulkOneWayExecutor` requirements by implementing the `bulk_execute` execution customization point.
+*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. `E1` has member functions `require` and `query` that forward to the corresponding members of the copy of `ex`, if present, and by implementing the `bulk_execute` execution customization point that forwards to the `bulk_execute` execution customization point of the copy of `ex`. `e1` has the same properties as `ex`, except for the addition of the `bulk_oneway_t` property and the exclusion of other interface-changing properties. The type `E1` satisfies the `BulkOneWayExecutor` requirements by implementing the `bulk_execute` execution customization point.
 
 *Remarks:* This function shall not participate in overload resolution unless `bulk_oneway_t::static_query_v<Executor>` is false and `oneway_t::static_query_v<Executor>` is true.
 
@@ -987,7 +997,7 @@ template<class Executor>
   friend see-below require(Executor ex, blocking_t::always_t);
 ```
 
-*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. If `Executor` satisfies the `OneWayExecutor` requirements, `E1` shall satisfy the `OneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex`. If `Executor` satisfies the `BulkOneWayExecutor` requirements, `E1` shall satisfy the `BulkOneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex`. In addition, `E1` provides an overload of `require` such that `e1.require(blocking.always)` returns a copy of `e1`, an overload of `query` such that `e1.query(blocking)` returns `blocking.always`, and the execution customization points `execute` and `bulk_execute` shall block the calling thread until the submitted functions have finished execution. `e1` has the same executor properties as `ex`, except for the addition of the `blocking_t::always_t` property, and removal of `blocking_t::never_t` and `blocking_t::possibly_t` properties if present.
+*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. If `Executor` satisfies the `OneWayExecutor` requirements, `E1` shall satisfy the `OneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex` and by implementing the `execute` execution customization point that forwards to the `execute` execution customization point of the copy of `ex`. If `Executor` satisfies the `BulkOneWayExecutor` requirements, `E1` shall satisfy the `BulkOneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex` and by implementing the `bulk_execute` execution customization point that forwards to the `bulk_execute` execution customization point of the copy of `ex`. In addition, `E1` provides an overload of `require` such that `e1.require(blocking.always)` returns a copy of `e1`, an overload of `query` such that `e1.query(blocking)` returns `blocking.always`, and the execution customization points `execute` and `bulk_execute` shall block the calling thread until the submitted functions have finished execution. `e1` has the same executor properties as `ex`, except for the addition of the `blocking_t::always_t` property, and removal of `blocking_t::never_t` and `blocking_t::possibly_t` properties if present.
 
 *Remarks:* This function shall not participate in overload resolution unless `blocking_adaptation_t::static_query_v<Executor>` is `blocking_adaptation.allowed`.
 
@@ -1019,7 +1029,7 @@ template<class Executor>
   friend see-below require(Executor ex, blocking_adaptation_t::allowed_t);
 ```
 
-*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. If `Executor` satisfies the `OneWayExecutor` requirements, `E1` shall satisfy the `OneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex`. If `Executor` satisfies the `BulkOneWayExecutor` requirements, `E1` shall satisfy the `BulkOneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex`. In addition, `blocking_adaptation_t::static_query_v<E1>` is `blocking_adaptation.allowed`, and `e1.require(blocking_adaptation.disallowed)` yields a copy of `ex`. `e1` has the same executor properties as `ex`, except for the addition of the `blocking_adaptation_t::allowed_t` property.
+*Returns:* A value `e1` of type `E1` that holds a copy of `ex`. If `Executor` satisfies the `OneWayExecutor` requirements, `E1` shall satisfy the `OneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex` and by implementing the `execute` execution customization point that forwards to the `execute` execution customization point of the copy of `ex`. If `Executor` satisfies the `BulkOneWayExecutor` requirements, `E1` shall satisfy the `BulkOneWayExecutor` requirements by providing member functions `require` and `query` that forward to the corresponding member functions of the copy of `ex` and by implementing the `bulk_execute` execution customization point that forwards to the `bulk_execute` execution customization point of the copy of `ex`. In addition, `blocking_adaptation_t::static_query_v<E1>` is `blocking_adaptation.allowed`, and `e1.require(blocking_adaptation.disallowed)` yields a copy of `ex`. `e1` has the same executor properties as `ex`, except for the addition of the `blocking_adaptation_t::allowed_t` property.
 
 #### Properties to indicate if submitted tasks represent continuations
 
