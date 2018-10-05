@@ -1027,9 +1027,9 @@ The `blocking_t` property describes what guarantees executors provide about the 
 
 | Nested Property Type | Nested Property Object Name | Requirements |
 |--------------------------|------------------------|--------------|
-| `blocking_t::possibly_t` | `blocking_t::possibly` | Invocation of an executor's execution customization point may block pending completion of one or more invocations of the submitted function object. |
-| `blocking_t::always_t` | `blocking_t::always` | Invocation of an executor's execution customization point shall block until completion of all invocations of submitted function object. |
-| `blocking_t::never_t` | `blocking_t::never` | Invocation of an executor's execution customization point shall not block pending completion of the invocations of the submitted function object. |
+| `blocking_t::possibly_t` | `blocking_t::possibly` | Invocation of an executor's execution customization point may block pending completion of one or more invocations of the submitted function objects. |
+| `blocking_t::always_t` | `blocking_t::always` | Invocation of an executor's execution customization point shall block until completion of all invocations of submitted function objects. |
+| `blocking_t::never_t` | `blocking_t::never` | Invocation of an executor's execution customization point shall not block pending completion of the invocations of the submitted function objects. |
 
 ##### `blocking_t::always_t` customization points
 
@@ -1104,7 +1104,7 @@ The `outstanding_work_t` property allows users of executors to indicate that tas
 | `outstanding_work_t::untracked_t` | `outstanding_work::untracked` | The existence of the executor object does not indicate any likely future submission of a function object. |
 | `outstanding_work_t::tracked_t` | `outstanding_work::tracked` | The existence of the executor object represents an indication of likely future submission of a function object. The executor or its associated execution context may choose to maintain execution resources in anticipation of this submission. |
 
-[*Note:* The `outstanding_work_t::tracked_t` and `outstanding_work_t::untracked_t` properties are used to communicate to the associated execution context intended future work submission on the executor. The intended effect of the properties is the behavior of execution context's facilities for awaiting outstanding work; specifically whether it considers the existance of the executor object with the `outstanding_work_t::tracked_t` property enabled outstanding work when deciding what to wait on. However this will be largely defined by the execution context implementation. It is intended that the execution context will define its wait facilities and on-destruction behaviour and provide an interface for querying this. An initial work towards this is included in P0737r0. *--end note*]
+[*Note:* The `outstanding_work_t::tracked_t` and `outstanding_work_t::untracked_t` properties are used to communicate to the associated execution context intended future work submission on the executor. The intended effect of the properties is the behavior of execution context's facilities for awaiting outstanding work; specifically whether it considers the existence of the executor object with the `outstanding_work_t::tracked_t` property enabled outstanding work when deciding what to wait on. However this will be largely defined by the execution context implementation. It is intended that the execution context will define its wait facilities and on-destruction behavior and provide an interface for querying this. An initial work towards this is included in P0737r0. *--end note*]
 
 #### Properties for bulk execution guarantees
 
@@ -1242,6 +1242,27 @@ This sub-clause contains templates that may be used to query the properties of a
         static_assert(std::is_integral_v<type>, "index type must be an integral type");
     };
 
+### Associated error handler type
+
+    template<class Executor>
+    struct executor_error_handler
+    {
+      private:
+        // exposition only
+        template<class T>
+        using helper = typename T::error_handler_type;
+
+        // exposition only
+        struct abortOnError{
+          template<class E> void operator()(E&&){ std:abort(); }
+        };
+
+      public:
+        using type = std::experimental::detected_or_t<
+          abortOnError, helper, decltype(execution::require(declval<const Executor&>(), execution::oneway))
+        >;
+    };
+
 ## Polymorphic executor support
 
 ### Class `bad_executor`
@@ -1319,6 +1340,18 @@ This function can be used with an inline executor which is defined as follows:
         f();
       }
     };
+<<<<<<< HEAD
+=======
+    template<class Function, class ErrorFunction>
+    void execute(inline_executor, Function f, ErrorFunction ef) noexcept
+    {
+      try {
+        f();
+      } catch(...) {
+        ef(std::current_exception());
+      }
+    }
+>>>>>>> update inline_executor
 
 as, in the case of an unsupported property, invocation of `execution::prefer` will fall back to an identity operation.
 
@@ -1786,8 +1819,8 @@ executors having the `execution::oneway` property established shall implement th
 ```
 class C { ... };
 
-template<class Function>
-  void execute(const C& c, Function&& f);
+template<class Function, class ErrorFunction>
+  void execute(const C& c, Function&& f, ErrorFunction&& ef);
 ```
 
 `C` is a type satisfying the `OneWayExecutor` requirements.
@@ -1795,7 +1828,7 @@ template<class Function>
 *Effects:* Submits the function `f` for execution on the `static_thread_pool`
 according to the `OneWayExecutor` requirements and the properties established
 for `c`. If the submitted function `f` exits via an exception, the
-`static_thread_pool` invokes `std::terminate()`.
+`static_thread_pool` invokes `ef(std::current_exception())`.
 
 #### `static_thread_pool` executor types with the `execution::bulk_oneway` property
 
