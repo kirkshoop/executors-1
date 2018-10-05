@@ -36,7 +36,7 @@ namespace execution {
   template<class Executor, class... Properties> struct can_prefer;
   template<class Executor, class Property> struct can_query;
 
-  template<class Executor, class F> struct can_execute;
+  template<class Executor, class F, class EF = executor_error_handler_t<Ex>> struct can_execute;
   template<class Executor, class F, class SF> struct can_bulk_execute;
 
   template<class Executor, class... Properties>
@@ -46,8 +46,8 @@ namespace execution {
   template<class Executor, class Property>
     constexpr bool can_query_v = can_query<Executor, Property>::value;
 
-  template<class Executor, class F>
-    constexpr bool can_execute_v = can_execute<Executor, F>::value;
+  template<class Executor, class F, class EF = executor_error_handler_t<Ex>>
+    constexpr bool can_execute_v = can_execute<Executor, F, EF>::value;
   template<class Executor, class F, class SF>
     constexpr bool can_bulk_execute_v = can_bulk_execute<Executor, F, SF>::value;
 
@@ -118,9 +118,11 @@ namespace execution {
 
   template<class Executor> struct executor_shape;
   template<class Executor> struct executor_index;
+  template<class Executor> struct executor_error_handler;
 
   template<class Executor> using executor_shape_t = typename executor_shape<Executor>::type;
   template<class Executor> using executor_index_t = typename executor_index<Executor>::type;
+  template<class Executor> using executor_error_handler_t = typename executor_error_handler<Executor>::type;
 
   // Polymorphic executor support:
 
@@ -181,11 +183,14 @@ In the Table below,
 
 - `x` denotes a (possibly const) executor object of type `X`,
 - `cf` denotes the function object  `DECAY_COPY(std::forward<F>(f))`
-- `f` denotes a function object of type `F&&` invocable as `cf()` and where `decay_t<F>` satisfies the `MoveConstructible` requirements.
+- `f` denotes a function object of type `F&&` invocable as `cf()` and where `decay_t<F>` satisfies the `MoveConstructible` requirements,
+- `e` denotes a (possibly const) error object of type `E` where `decay_t<E>` satisfies the `MoveConstructible` requirements and where `E` may be any of `std::error_code`, `std::exception_ptr` and other unspecified error object types,
+- `cef` denotes the function object  `DECAY_COPY(std::forward<EF>(ef))`,
+- `ef` denotes a function object of type `EF&&` invocable as `cef(e)`, where `cef(e)` satisfies the `NoThrowInvocable` requirements and where `decay_t<EF>` satisfies the `MoveConstructible` requirements.
 
 | Expression | Return Type | Operational semantics |
 |------------|-------------|---------------------- |
-| `execute(x, f)` | `void` | Evaluates `DECAY_COPY(std::forward<F>(f))` on the calling thread to create `cf` that will be invoked at most once by an execution agent. <br/> May block pending completion of this invocation. <br/> Synchronizes with [intro.multithread] the invocation of `f`. <br/>Shall not propagate any exception thrown by the function object or any other function submitted to the executor. [*Note:* The treatment of exceptions thrown by one-way submitted functions and the forward progress guarantee of the associated execution agent(s) are implementation defined. *--end note.*] |
+| `execute(x, f, ef)` | `void` | Evaluates `DECAY_COPY(std::forward<F>(f))` on the calling thread to create `cf` that will be invoked at most once by an execution agent. <br/> Evaluates `DECAY_COPY(std::forward<EF>(ef))` on the calling thread to create `cef` that will be invoked at most once by an execution agent when possible and otherwise in an unspecified execution context. [*Note:* A concrete executor may strengthen this guarantee. *--end note.*]<br/> May block pending completion of the invocation of `cf` and `cef`. <br/> Synchronizes with [intro.multithread] the invocation of `f`. <br/> Synchronizes with [intro.multithread] the invocation of `ef`. <br/>Shall not propagate any exception thrown by the invocation of `f` or any other function submitted to the executor. <br/>A concrete executor may invoke the expression `cef(std::current_exception())` for any exception thrown by the invocation of `f`. <br/>A concrete executor may invoke the expression `cef(<implementation-defined>)` for any error condition that prevents an execution agent from invoking `cf`. [*Note:* The treatment of exceptions thrown by one-way submitted functions and the forward progress guarantee of the associated execution agent(s) are implementation defined. *--end note.*] |
 
 ### `BulkOneWayExecutor` requirements
 
@@ -284,17 +289,17 @@ The name `query` denotes a customization point. The effect of the expression `st
 
 The name `execute` denotes an execution customization point.
 
-When `execute` invokes a free execution function of the same name, overload resolution is performed in a context that includes the declaration `template <class Executor, class Function> void execute(const Executor&, Function) = delete;`. This context also does not include a declaration of the execution customization point.
+When `execute` invokes a free execution function of the same name, overload resolution is performed in a context that includes the declaration `template <class Executor, class Function, class ErrorFunction> void execute(const Executor&, Function, ErrorFunction) = delete;`. This context also does not include a declaration of the execution customization point.
 
 [*Note:* This provision allows execution customization points to invoke the executor's free, non-member execution function of the same name without recursion. *--end note*]
 
-Whenever `std::execution::execute(E, F)` is a valid expression, that expression satisfies the syntactic requirements for the free execution function `execute(E, F)` with that free execution function's semantics.
+Whenever `std::execution::execute(E, F, EF)` is a valid expression, that expression satisfies the syntactic requirements for the free execution function `execute(E, F, EF)` with that free execution function's semantics.
 
-The effect of the expression `std::execution::execute(E, F)` for some expressions `E` and `F` is equivalent to:
+The effect of the expression `std::execution::execute(E, F, EF)` for some expressions `E`, `F` and `EF` is equivalent to:
 
-* If the expression `execute(E, F)` is well-formed, `execute(E, F)`.
+* If the expression `execute(E, F, EF)` is well-formed, `execute(E, F, EF)`.
 
-* Otherwise, `std::execution::execute(E, F)` is ill-formed.
+* Otherwise, `std::execution::execute(E, F, EF)` is ill-formed.
 
 ### `bulk_execute`
 
@@ -332,7 +337,7 @@ This sub-clause contains templates that may be used to query the properties of a
 
 ### Execution customization point type traits
 
-    template<class Executor, class F> struct can_execute;
+    template<class Executor, class F, class EF = executor_error_handler_t<Executor>> struct can_execute;
     template<class Executor, class F, class SF> struct can_bulk_execute;
 
 This sub-clause contains templates that may be used to query whether an execution customization point expression is well-formed at compile-time.
@@ -340,8 +345,8 @@ Each of these templates shall satisfy the requirements of `DefaultConstructible`
 
 | Template                   | Condition           | Preconditions  |
 |----------------------------|---------------------|----------------|
-| `template<`<br/>`class Executor,`<br/>`class F>` <br/>`struct can_execute` | The expression <br/>`std::execution::execute( `<br/>`declval<const Executor>(), `<br/>`declval<F>())` is well formed. | `Executor` is a complete type. |
-| `template<`<br/>`class Executor, `<br/>`class F, `<br/>`class SF>` <br/>`struct can_bulk_execute` | The expression <br/>`std::execution::bulk_execute( `<br/>`declval<const Executor>(), `<br/>`declval<F>(), `<br/>`declval<executor_shape_t<Executor>>(), `<br/>`declval<SF>())` is well formed. | `Executor` is a complete type. |
+| `template<`<br/>`class Executor,`<br/>`class F,`<br/>`class EF>` <br/>`struct can_execute` | The expression <br/>`std::execution::execute( `<br/>`declval<const Executor>(), `<br/>`declval<F>(), `<br/>`declval<EF>())` is well formed. | `Executor`, `F` and `EF` are all complete types. |
+| `template<`<br/>`class Executor, `<br/>`class F, `<br/>`class SF>` <br/>`struct can_bulk_execute` | The expression <br/>`std::execution::bulk_execute( `<br/>`declval<const Executor>(), `<br/>`declval<F>(), `<br/>`declval<executor_shape_t<Executor>>(), `<br/>`declval<SF>())` is well formed. | `Executor`, `F`, `executor_shape_t<Executor>` and `SF` are all complete types. |
 
 ## Executor properties
 
