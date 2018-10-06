@@ -745,18 +745,28 @@ template<class Executor>
 
 #### `oneway_t` polymorphic wrapper
 
-In addition to conforming to the above specification for polymorphic wrappers, the nested class template `oneway_t::polymorphic_executor_type` provides the following member functions:
+In addition to conforming to the above specification for polymorphic wrappers, the nested class template `oneway_t::polymorphic_executor_type` provides the following member functions and an `execute` customization:
 
 ```
 template <class... SupportableProperties>
 class polymorphic_executor_type
 {
+private:
+  // exposition only
+  void virtual_execute(std::function<void()> f);
+
 public:
   template<class Executor>
     polymorphic_executor_type(Executor e);
 
   template<class Executor>
     polymorphic_executor_type& operator=(Executor e);
+
+  // exposition only
+  template<class Function>
+    friend void execute(polymorphic_executor_type ex, Function&& f) {
+      ex.virtual_execute((Function&&) f);
+    }
 };
 ```
 
@@ -787,6 +797,17 @@ template<class Executor>
 
 *Returns:* `*this`.
 
+```
+template<class Function>
+  friend void execute(polymorphic_executor_type ex, Function&& f);
+```
+
+*Effects:* Performs `execute(e, f2)`, where:
+
+* `e` is the target object of `*this`;
+* `f1` is the result of `DECAY_COPY(std::forward<Function>(f))`;
+* `f2` is a function object of unspecified type that, when invoked as `f2()`, performs `f1()`.
+
 #### `bulk_oneway_t` customization points
 
 In addition to conforming to the above specification for interface-changing properties, the `oneway_t` property provides the following customization:
@@ -810,19 +831,29 @@ template<class Executor>
 
 #### `bulk_oneway_t` polymorphic wrapper
 
-In addition to conforming to the above specification for polymorphic wrappers, the nested class template `bulk_oneway_t::polymorphic_executor_type` has the following member functions:
+In addition to conforming to the above specification for polymorphic wrappers, the nested class template `bulk_oneway_t::polymorphic_executor_type` has the following member functions and a `bulk_execute` customization:
 
 ```
 template <class... SupportableProperties>
 class polymorphic_executor_type
 {
+private:
+  // exposition only
+  void virtual_bulk_execute(std::function<void(size_t, void*)> f, size_t s, std::function<void*()> sf) = 0;
+
 public:
   template<class Executor>
     polymorphic_executor_type(Executor e);
 
   template<class Executor>
     polymorphic_executor_type& operator=(Executor e);
-};
+
+  // exposition only
+  template<class Function, class SharedFactory>
+    friend void bulk_execute(polymorphic_executor_type ex, Function&& f, size_t s, SharedFactory&& sf) {
+      ex.virtual_bulk_execute((Function&&) f, s, (SharedFactory&&) sf);
+  .  }
+};/
 ```
 
 `bulk_oneway_t::polymorphic_executor_type` satisfies the `BulkOneWayExecutor` requirements.
@@ -851,6 +882,21 @@ template<class Executor>
 *Effects:* `polymorphic_executor_type(std::move(e)).swap(*this)`.
 
 *Returns:* `*this`.
+
+```
+template<class Function, class SharedFactory>
+  friend void bulk_execute(polymorphic_executor_type ex, Function&& f, size_t n, SharedFactory&& sf);
+```
+
+*Effects:* Performs `bulk_execute(e, f2, n, sf2)`, where:
+
+* `e` is the target object of `*this`;
+* `sf1` is the result of `DECAY_COPY(std::forward<SharedFactory>(sf))`;
+* `sf2` is a function object of unspecified type that, when invoked as `sf2()`, performs `sf1()`;
+* `s1` is the result of `sf1()`;
+* `s2` is the result of `sf2()`;
+* `f1` is the result of `DECAY_COPY(std::forward<Function>(f))`;
+* `f2` is a function object of unspecified type that, when invoked as `f2(i, s2)`, performs `f1(i, s1)`, where `i` is a value of type `size_t`.
 
 ### Behavioral properties
 
@@ -1262,12 +1308,12 @@ This function can be used with an inline executor which is defined as follows:
         return false;
       }
 
+      template<class Function>
+      friend void execute(inline_executor, Function f) noexcept
+      {
+        f();
+      }
     };
-    template<class Function>
-    void execute(inline_executor, Function f) noexcept
-    {
-      f();
-    }
 
 as, in the case of an unsupported property, invocation of `execution::prefer` will fall back to an identity operation.
 
