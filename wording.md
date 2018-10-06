@@ -758,7 +758,7 @@ class polymorphic_executor_type
 {
 private:
   // exposition only
-  void virtual_execute(std::function<void()> f);
+  void virtual_execute(std::function<void()> f, std::function<void(std::exception_ptr)> ef);
 
 public:
   template<class Executor>
@@ -768,9 +768,9 @@ public:
     polymorphic_executor_type& operator=(Executor e);
 
   // exposition only
-  template<class Function>
-    friend void execute(polymorphic_executor_type ex, Function&& f) {
-      ex.virtual_execute((Function&&) f);
+  template<class Function, class ErrorFunction>
+    friend void execute(polymorphic_executor_type ex, Function&& f, ErrorFunction&& ef) {
+      ex.virtual_execute((Function&&) f, (ErrorFunction&&) ef);
     }
 };
 ```
@@ -803,15 +803,18 @@ template<class Executor>
 *Returns:* `*this`.
 
 ```
-template<class Function>
-  friend void execute(polymorphic_executor_type ex, Function&& f);
+template<class Function, class ErrorFunction>
+  friend void execute(polymorphic_executor_type ex, Function&& f, ErrorFunction&& ef);
 ```
 
-*Effects:* Performs `execute(e, f2)`, where:
+*Effects:* Performs `execute(ex, f2, ef2)`, where:
 
-* `e` is the target object of `*this`;
+* `ex` is the target object of `*this`;
 * `f1` is the result of `DECAY_COPY(std::forward<Function>(f))`;
 * `f2` is a function object of unspecified type that, when invoked as `f2()`, performs `f1()`.
+* `e` is a (possibly const) error object of type `E` where `decay_t<E>` satisfies the `MoveConstructible` requirements and where `E` may be any of `std::error_code`, `std::exception_ptr` and other unspecified error object types
+* `ef1` is the result of `DECAY_COPY(std::forward<Function>(ef))`;
+* `ef2` is a function object of unspecified type that, when invoked as `ef2(e)`, performs `ef1(e)`.
 
 #### `bulk_oneway_t` customization points
 
@@ -1334,24 +1337,16 @@ This function can be used with an inline executor which is defined as follows:
         return false;
       }
 
-      template<class Function>
-      friend void execute(inline_executor, Function f) noexcept
+      template<class Function, class ErrorFunction>
+      friend void execute(inline_executor, Function f, ErrorFunction ef) noexcept
       {
-        f();
+        try {
+          f();
+        } catch(...) {
+          ef(std::current_exception());
+        }
       }
     };
-<<<<<<< HEAD
-=======
-    template<class Function, class ErrorFunction>
-    void execute(inline_executor, Function f, ErrorFunction ef) noexcept
-    {
-      try {
-        f();
-      } catch(...) {
-        ef(std::current_exception());
-      }
-    }
->>>>>>> update inline_executor
 
 as, in the case of an unsupported property, invocation of `execution::prefer` will fall back to an identity operation.
 
